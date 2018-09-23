@@ -110,20 +110,98 @@ def evaluation(model, features, target):
     """
     とりあえず結果を評価してみる
     """
-    evaluation_score = round(model.score(features , target) * 100, 2)
+
+    # from sklearn import cross_validation
+    from sklearn.model_selection import cross_val_score
+    scores = cross_val_score(model, features, target, cv=10)
+    # pprint.pprint(scores)
+    # 各分割におけるスコア
+    # print('Cross-Validation scores: {}'.format(scores))
+    # スコアの平均値
+    # import numpy as np
+    evaluation_score = np.mean(scores)
+    # print('Average score: {}'.format(evaluation_score))
+    # li = [i for i in range(4, 10)]
+    # li.append(100)
+    # for n in li:
+    #     print('Average score {}: {}'.format(n, np.mean(cross_val_score(model, features, target, cv=n))))
+    # scores2 = cross_val_score(model, features, target, cv=100)
+    # evaluation_score2 = np.mean(scores2)
+    # print('Average score {} : {}'.format(100, evaluation_score2))
+
+
+
+
+    # 単純な比較による検証
+    # evaluation_score = round(model.score(features , target) * 100, 2)
+
+    # leave-one-out 法
+    # from sklearn.model_selection import LeaveOneOut
+    # loo = LeaveOneOut()
+    # loo.get_n_splits(X)
+
+    # n = LeaveOneOut().get_n_splits(features)
+    # n = 100
+    # 100にしたからといってそこまで精度が上がるということでもなさそう。
+    # scores2 = cross_val_score(model, features, target, cv=n)
+    # evaluation_score2 = np.mean(scores2)
+    # print('Average score {} : {}'.format(n, evaluation_score2))
+
+    # hold-out 法
+
+    # k-folds 法
+
     print(" -- evaluation : {}".format(evaluation_score))
 
     return evaluation_score
 
-def create_model_DecisionTree(predictor_var, response_var):
-    # 決定木の作成とアーギュメントの設定
-    max_depth = 10
-    min_samples_split = 5
-    # model_DecisionTree = tree.DecisionTreeClassifier(max_depth = max_depth, min_samples_split = min_samples_split, random_state = 1)
-    model_DecisionTree = DecisionTreeClassifier(max_depth = max_depth, min_samples_split = min_samples_split, random_state = 1)
-    model_DecisionTree = model_DecisionTree.fit(predictor_var, response_var)
 
-    return model_DecisionTree
+def GridSearch(clf, param_grid, cv_cnt, predictor_var, response_var):
+    print(" --- grid_search ")
+    # グリッドサーチにより最適値を求める
+    # from sklearn import grid_search
+    from sklearn.model_selection import GridSearchCV
+    grid_search = GridSearchCV(estimator=clf, param_grid=param_grid, scoring='accuracy', cv=cv_cnt, n_jobs=-1)
+    grid_search.fit(predictor_var, response_var)
+    print(grid_search.best_score_)
+    print(grid_search.best_params_)
+    # print(gs.best_estimator_)
+
+    # return grid_search.best_params_
+    return grid_search.best_estimator_
+
+def create_model_DecisionTree(predictor_var, response_var, do_gridSearch):
+
+    if(not do_gridSearch):
+        # GridSearchせずに自分でパラメータ設定
+        # 決定木の作成とアーギュメントの設定
+        # max_depth = 10
+        max_depth = 7
+        # min_samples_split = 5
+        min_samples_split = 6
+        criterion = 'entropy'
+        # model_DecisionTree = tree.DecisionTreeClassifier(max_depth = max_depth, min_samples_split = min_samples_split, random_state = 1)
+        # model_DecisionTree = DecisionTreeClassifier(max_depth = max_depth, min_samples_split = min_samples_split, random_state = 1)
+        model_DecisionTree = DecisionTreeClassifier(max_depth = max_depth, min_samples_split = min_samples_split, random_state = 1, criterion=criterion)
+        model_DecisionTree = model_DecisionTree.fit(predictor_var, response_var)
+        return model_DecisionTree
+    else:
+        # GridSearchしてその結果最適なパラメータで設定
+        clf = DecisionTreeClassifier()
+        # 試行するパラメータを羅列する
+        params = {
+                'max_depth': list(range(1, 10)),
+                'min_samples_split' : list(range(3, 10)),
+                'criterion': ['gini', 'entropy'],
+            }
+        best_estimator = GridSearch(clf, params, 10, predictor_var, response_var)
+        # model_DecisionTree = DecisionTreeClassifier(  max_depth = best_params["max_depth"], 
+        #                                 min_samples_split = best_params["min_samples_split"], 
+        #                                 random_state = 1, 
+        #                                 criterion=best_params["criterion"])
+        # model_DecisionTree = model_DecisionTree.fit(predictor_var, response_var)
+        return best_estimator
+
 
 def create_model_LogisticRegression(predictor_var, response_var):
     # ロジスティック回帰
@@ -132,12 +210,26 @@ def create_model_LogisticRegression(predictor_var, response_var):
     # Y_pred = logreg.predict(X_test)
     return model_LogisticRegression
 
-def create_model_SVM(predictor_var, response_var):
+def create_model_SVM(predictor_var, response_var, do_gridSearch):
     # Support Vector Machines
-    model_SVC = SVC()
-    model_SVC.fit(predictor_var, response_var)
 
-    return model_SVC
+    if(not do_gridSearch):
+        # GridSearchせずに自分でパラメータ設定
+        # model_SVC = SVC()
+        model_SVC = SVC(class_weight='balanced', random_state=0, C=0.1, gamma=0.01, kernel='linear')
+        # model_SVC.fit(predictor_var, response_var)
+        return model_SVC
+    else:
+        # GridSearchしてその結果最適なパラメータで設定
+        clf = SVC(class_weight='balanced', random_state=0)
+        # 試行するパラメータを羅列する
+        params = {
+                'C': [0.01, 0.1, 1.0],
+                'gamma' : [0.01, 0.1, 1.0],
+                'kernel': ['rbf', 'linear'],
+            }
+        best_estimator = GridSearch(clf, params, 10, predictor_var, response_var)
+        return best_estimator
 
 def create_model_KNeighbors(predictor_var, response_var):
     # k近傍法(KNN)
@@ -160,12 +252,29 @@ def create_model_Perceptron(predictor_var, response_var):
 
     return model_Perceptron
 
-def create_model_RandomForest(predictor_var, response_var):
+def create_model_RandomForest(predictor_var, response_var, do_gridSearch):
     # Random Forest
-    model_RandomForest = RandomForestClassifier(n_estimators=100)
-    model_RandomForest.fit(predictor_var, response_var)
 
-    return model_RandomForest
+    if(not do_gridSearch):
+        # GridSearchせずに自分でパラメータ設定
+        n_estimators = 50
+        min_samples_split = 15
+        max_depth = 15
+        model_RandomForest = RandomForestClassifier(n_estimators=n_estimators, min_samples_split=min_samples_split, max_depth=max_depth, random_state=0)
+        model_RandomForest.fit(predictor_var, response_var)
+        return model_RandomForest
+    else:
+        clf = RandomForestClassifier()
+        params = {
+                'n_estimators'      : [5, 10, 20, 30, 50, 100, 300],
+                # 'max_features'      : [3, 5, 10, 15, 20],
+                'random_state'      : [0],
+                'n_jobs'            : [1],
+                'min_samples_split' : [3, 5, 10, 15, 20, 25, 30, 40, 50, 100],
+                'max_depth'         : [3, 5, 10, 15, 20, 25, 30, 40, 50, 100]
+        }
+        best_estimator = GridSearch(clf, params, 10, predictor_var, response_var)
+        return best_estimator
 
 if __name__ == '__main__':
 
@@ -202,7 +311,8 @@ if __name__ == '__main__':
     df_models = pd.DataFrame(index=[], columns=model_index)
 
     # 確認するモデルリストを作成
-    model_list = [  "DecisionTree", 
+    model_list = [
+                    "DecisionTree", 
                     "LogisticRegression",
                     "Support Vector Machines",
                     "k近傍法(KNN)",
@@ -216,13 +326,13 @@ if __name__ == '__main__':
         # print(index)
         if(name == "DecisionTree"):
             # 決定木
-            model = create_model_DecisionTree(predictor_var, response_var)
+            model = create_model_DecisionTree(predictor_var, response_var, False)
         elif(name == "LogisticRegression"):
             # ロジスティック回帰
             model = create_model_LogisticRegression(predictor_var, response_var)
         elif(name == "Support Vector Machines"):
             # Support Vector Machines
-            model = create_model_SVM(predictor_var, response_var)
+            model = create_model_SVM(predictor_var, response_var, False)
         elif(name == "k近傍法(KNN)"):
             # k近傍法(KNN)
             model = create_model_KNeighbors(predictor_var, response_var)
@@ -233,7 +343,7 @@ if __name__ == '__main__':
             # パーセプトロン
             model = create_model_Perceptron(predictor_var, response_var)
         elif(name == "Random Forest"):
-            model = create_model_RandomForest(predictor_var, response_var)
+            model = create_model_RandomForest(predictor_var, response_var, False)
         else:
             print("Don't Exist Model")
             continue
@@ -247,6 +357,7 @@ if __name__ == '__main__':
 
     # 一番精度が高そうなモデルを使って、テストデータに対して予測
     model = df_sorted_models.iloc[0]["model"]
+    pprint.pprint(model)
     prediction = model.predict(test_predictor_var)
 
     # 予測結果をファイルに出力
